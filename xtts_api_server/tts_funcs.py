@@ -48,12 +48,12 @@ supported_languages = {
 }
 
 default_tts_settings = {
-    "temperature" : 0.75,
+    "temperature" : 0.5,
     "length_penalty" : 1.0,
     "repetition_penalty": 5.0,
     "top_k" : 50,
     "top_p" : 0.85,
-    "speed" : 1,
+    "speed" : 1.2,
     "enable_text_splitting": True
 }
 
@@ -63,7 +63,7 @@ official_model_list_v2 = ["2.0.0","2.0.1","2.0.2","2.0.3"]
 reversed_supported_languages = {name: code for code, name in supported_languages.items()}
 
 class TTSWrapper:
-    def __init__(self,output_folder = "./output", speaker_folder="./speakers",model_folder="./xtts_folder",lowvram = False,model_source = "local",model_version = "2.0.2",device = "cuda",deepspeed = False,enable_cache_results = True):
+    def __init__(self,output_folder = "./output", speaker_folder="./speakers",model_folder="./xtts_folder",lowvram = False,model_source = "local",model_version = "2.0.2",device = "cuda",deepspeed = False,enable_cache_results = True, string_parser = False):
 
         self.cuda = device # If the user has chosen what to use, we rewrite the value to the value we want to use
         self.device = 'cpu' if lowvram else (self.cuda if torch.cuda.is_available() else "cpu")
@@ -94,6 +94,34 @@ class TTSWrapper:
             # Reset the contents of the cache file at each initialization.
             with open(self.cache_file_path, 'w') as cache_file:
                 json.dump({}, cache_file)
+
+        self.string_parser = string_parser
+        if self.string_parser:
+            self.lang_pattern = re.compile(r'<language="(.*?)">(.*)')
+            self.replace_vocab = self.get_replace_vocab()
+
+    def get_replace_vocab(self):
+        # Place the replace_vocab.txt into the model_folder.
+        # Delimiter: two spaces
+        # The structure:
+        # word  word_to_replace
+        # Where: word - word to change, word_to_replace - what to replace this word with
+        # Example:
+        # HPE  H P E
+        # GPU  G P U
+        replace_vocab_filepath = os.path.join(self.model_folder, 'replace_vocab.txt')
+        replace_vocab = {}
+        if not os.path.exists(replace_vocab_filepath):
+            logger.warning(f"replace_vocab file not found: {replace_vocab_filepath}.")
+        else:
+            with open(replace_vocab_filepath, 'r') as file:
+                for line in file:
+                    # Split each line into key and value based on two spaces
+                    key, value = line.strip().split('  ')
+                    replace_vocab[key] = value
+                logger.info(f"replace_vocab loaded: {replace_vocab_filepath}")
+        return replace_vocab
+
     # HELP FUNC
     def isModelOfficial(self,model_version):
         if model_version in official_model_list:
@@ -541,6 +569,19 @@ class TTSWrapper:
 
         return speaker_wav
 
+    def get_lang_from_text(self, text):
+        match = self.lang_pattern.match(text)
+        if match:
+            language = match.group(1)
+            text = match.group(2)
+            return text, language
+        else:
+            return text, None
+
+    def replace_words(self, text):
+        for term in self.replace_vocab:
+            text = re.sub(pattern=rf'\b{term}\b', repl=self.replace_vocab[term], string=text)
+        return text
 
     # MAIN FUNC
     def process_tts_to_file(self, text, speaker_name_or_path, language, file_name_or_path="out.wav", stream=False):
@@ -558,6 +599,17 @@ class TTSWrapper:
             if os.path.isfile(text) and text.lower().endswith('.txt'):
                 with open(text, 'r', encoding='utf-8') as f:
                     text = f.read()
+
+            if self.string_parser:
+                text, lang_from_text = self.get_lang_from_text(text)
+                if lang_from_text:
+                    if lang_from_text != language:
+                        logger.info(
+                            f"Language extracted from the input text ({lang_from_text}) "
+                            f"is different from one specified in the request ({language})."
+                        )
+                    language = lang_from_text
+                text = self.replace_words(text)
 
             # Generate unic name for cached result
             if self.enable_cache_results:

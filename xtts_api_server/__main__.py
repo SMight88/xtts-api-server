@@ -20,6 +20,7 @@ parser.add_argument("--use-cache", action='store_true', help="Enables caching of
 parser.add_argument("--streaming-mode", action='store_true', help="Enables streaming mode, currently needs a lot of work.")
 parser.add_argument("--streaming-mode-improve", action='store_true', help="Includes an improved streaming mode that consumes 2gb more VRAM and uses a better tokenizer, good for languages such as Chinese")
 parser.add_argument("--stream-play-sync", action='store_true', help="Additional flag for streaming mod that allows you to play all audio one at a time without interruption")
+parser.add_argument("--string-parser", action='store_true', help="Enables input string parser: get input language from the string, replace words using custom vocabulary.")
 
 args = parser.parse_args()
 
@@ -42,6 +43,7 @@ os.environ["LOWVRAM_MODE"] = str(args.lowvram).lower() # Set lowvram mode
 os.environ["STREAM_MODE"] = str(args.streaming_mode).lower() # Enable Streaming mode
 os.environ["STREAM_MODE_IMPROVE"] = str(args.streaming_mode_improve).lower() # Enable improved Streaming mode
 os.environ["STREAM_PLAY_SYNC"] = str(args.stream_play_sync).lower() # Enable Streaming mode
+os.environ["STRING_PARSER"] = str(args.string_parser).lower() # Enable string parsing
 
 from xtts_api_server.server import app
 
