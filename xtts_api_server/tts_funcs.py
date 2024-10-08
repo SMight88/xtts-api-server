@@ -181,7 +181,7 @@ class TTSWrapper:
             else:
                 cache_data = {}  # Initialization of an empty dictionary if the file does not exist or is empty.
 
-            timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+            timestamp = datetime.now().strftime("%Y%m%d%H%M%S%f")[:17]
             cache_data[timestamp] = {**text_params, 'file_name': file_name}
 
             with open(self.cache_file_path, 'w') as cache_file:
