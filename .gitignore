@@ -1,5 +1,7 @@
 dist
 venv
+.venv
+.idea
 speakers
 output
 test
