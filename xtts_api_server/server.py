@@ -239,6 +239,7 @@ async def tts_stream(request: Request, text: str = Query(), speaker_wav: str = Q
             text=text,
             speaker_name_or_path=speaker_wav,
             language=language.lower(),
+            file_name_or_path=f'{str(uuid4())}.wav',
             stream=True,
         )
         # Write file header to the output stream.

@@ -477,6 +477,15 @@ class TTSWrapper:
         text = re.sub(r'"\s?(.*?)\s?"', r"'\1'", text)
         return text
 
+    @staticmethod
+    def prepare_chunk_for_streaming(chunk):
+        # Convert the chunk to NumPy, process it, and return it in byte format
+        chunk = chunk.cpu().numpy()
+        chunk = chunk[None, : int(chunk.shape[0])]
+        chunk = np.clip(chunk, -1, 1)
+        chunk = (chunk * 32767).astype(np.int16)
+        return chunk.tobytes()
+
     async def stream_generation(self,text,speaker_name,speaker_wav,language,output_file):
         # Log time
         generate_start_time = time.time()  # Record the start time of loading the model
@@ -497,11 +506,8 @@ class TTSWrapper:
             if isinstance(chunk, list):
                 chunk = torch.cat(chunk, dim=0)
             file_chunks.append(chunk)
-            chunk = chunk.cpu().numpy()
-            chunk = chunk[None, : int(chunk.shape[0])]
-            chunk = np.clip(chunk, -1, 1)
-            chunk = (chunk * 32767).astype(np.int16)
-            yield chunk.tobytes()
+
+            yield self.prepare_chunk_for_streaming(chunk)
 
         if len(file_chunks) > 0:
             wav = torch.cat(file_chunks, dim=0)
@@ -513,6 +519,26 @@ class TTSWrapper:
         generate_elapsed_time = generate_end_time - generate_start_time
 
         logger.info(f"Processing time: {generate_elapsed_time:.2f} seconds.")
+
+    async def stream_wav(self, wav_file_path):
+        # Load the wav file using torchaudio
+        waveform, sample_rate = torchaudio.load(wav_file_path)
+
+        # Split the waveform into chunks
+        total_frames = waveform.shape[1]
+        chunk_start = 0
+
+        while chunk_start < total_frames:
+            chunk_end = min(chunk_start + self.stream_chunk_size, total_frames)
+            chunk = waveform[:, chunk_start:chunk_end]
+
+            if isinstance(chunk, list):
+                chunk = torch.cat(chunk, dim=0)
+
+            yield self.prepare_chunk_for_streaming(chunk)
+
+            # Move to the next chunk
+            chunk_start += self.stream_chunk_size
 
     def local_generation(self,text,speaker_name,speaker_wav,language,output_file):
         # Log time
@@ -632,7 +658,13 @@ class TTSWrapper:
 
             if cached_result is not None:
                 logger.info("Using cached result.")
-                return cached_result  # Return the path to the cached result.
+                if stream:
+                    async def stream_wav_fn():
+                        async for chunk in self.stream_wav(cached_result):
+                            yield chunk
+                    return stream_wav_fn()
+                else:
+                    return cached_result  # Return the path to the cached result.
 
             self.switch_model_device() # Load to CUDA if lowram ON
 
