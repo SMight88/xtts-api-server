@@ -97,7 +97,7 @@ class TTSWrapper:
 
         self.string_parser = string_parser
         if self.string_parser:
-            self.lang_pattern = re.compile(r'<language="(.*?)">(.*)')
+            self.lang_pattern = re.compile(r"<(language|lang)=['\"]?(.*?)['\"]?>(.*)")
             self.replace_vocab = self.get_replace_vocab()
 
     def get_replace_vocab(self):
@@ -598,8 +598,8 @@ class TTSWrapper:
     def get_lang_from_text(self, text):
         match = self.lang_pattern.match(text)
         if match:
-            language = match.group(1)
-            text = match.group(2)
+            language = match.group(2).strip()
+            text = match.group(3).strip()
             return text, language
         else:
             return text, None
