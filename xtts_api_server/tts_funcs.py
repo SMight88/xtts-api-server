@@ -2,6 +2,7 @@
 
 import torch
 import torchaudio
+import json
 
 from TTS.api import TTS
 
@@ -48,7 +49,7 @@ supported_languages = {
 }
 
 default_tts_settings = {
-    "temperature" : 0.5,
+    "temperature" : 0.6,
     "length_penalty" : 1.0,
     "repetition_penalty": 5.0,
     "top_k" : 50,
@@ -101,26 +102,22 @@ class TTSWrapper:
             self.replace_vocab = self.get_replace_vocab()
 
     def get_replace_vocab(self):
-        # Place the replace_vocab.txt into the model_folder.
-        # Delimiter: two spaces
-        # The structure:
-        # word  word_to_replace
-        # Where: word - word to change, word_to_replace - what to replace this word with
-        # Example:
-        # HPE  H P E
-        # GPU  G P U
-        replace_vocab_filepath = os.path.join(self.model_folder, 'replace_vocab.txt')
-        replace_vocab = {}
+        # Place the replace_vocab.json into the model_folder. The structure:
+        # {
+        #   "lang": {
+        #       "word": "word_to_replace"
+        #   }
+        # }
+        # Where: lang - specific language, word - word to change, word_to_replace - what to replace this word with
+        replace_vocab_filepath = os.path.join(self.model_folder, 'replace_vocab.json')
         if not os.path.exists(replace_vocab_filepath):
             logger.warning(f"replace_vocab file not found: {replace_vocab_filepath}.")
+            return None
         else:
-            with open(replace_vocab_filepath, 'r') as file:
-                for line in file:
-                    # Split each line into key and value based on two spaces
-                    key, value = line.strip().split('  ')
-                    replace_vocab[key] = value
-                logger.info(f"replace_vocab loaded: {replace_vocab_filepath}")
-        return replace_vocab
+            with open(replace_vocab_filepath) as f:
+                replace_vocab = json.load(f)
+            logger.info(f"replace_vocab loaded: {replace_vocab_filepath}")
+            return replace_vocab
 
     # HELP FUNC
     def isModelOfficial(self,model_version):
@@ -604,9 +601,11 @@ class TTSWrapper:
         else:
             return text, None
 
-    def replace_words(self, text):
-        for term in self.replace_vocab:
-            text = re.sub(pattern=rf'\b{term}\b', repl=self.replace_vocab[term], string=text)
+    def replace_words(self, text, language):
+        if self.replace_vocab:
+            replace_vocab_lang = self.replace_vocab[language]
+            for term in replace_vocab_lang:
+                text = re.sub(pattern=rf'\b{term}\b', repl=replace_vocab_lang[term], string=text)
         return text
 
     # MAIN FUNC
@@ -629,13 +628,19 @@ class TTSWrapper:
             if self.string_parser:
                 text, lang_from_text = self.get_lang_from_text(text)
                 if lang_from_text:
-                    if lang_from_text != language:
-                        logger.info(
-                            f"Language extracted from the input text ({lang_from_text}) "
-                            f"is different from one specified in the request ({language})."
+                    if lang_from_text in supported_languages.keys():
+                        if lang_from_text != language:
+                            logger.info(
+                                f"Use language extracted from the input text ({lang_from_text}) "
+                                f"instead of default language ({language})."
+                            )
+                        language = lang_from_text
+                    else:
+                        logger.warning(
+                            f"Language extracted from the input text ({lang_from_text}) is not supported! "
+                            f"Use default language ({language})."
                         )
-                    language = lang_from_text
-                text = self.replace_words(text)
+                text = self.replace_words(text, language)
 
             # Generate unic name for cached result
             if self.enable_cache_results:
