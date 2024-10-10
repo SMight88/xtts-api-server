@@ -96,6 +96,7 @@ class TTSWrapper:
             with open(self.cache_file_path, 'w') as cache_file:
                 json.dump({}, cache_file)
 
+        self.replace_vocab_filepath = os.path.join(self.model_folder, 'replace_vocab.json')
         self.replace_vocab = None
         self.lang_pattern = None
         self.string_parser = string_parser
@@ -111,15 +112,19 @@ class TTSWrapper:
         #   }
         # }
         # Where: lang - specific language, word - word to change, word_to_replace - what to replace this word with
-        replace_vocab_filepath = os.path.join(self.model_folder, 'replace_vocab.json')
-        if not os.path.exists(replace_vocab_filepath):
-            logger.warning(f"replace_vocab file not found: {replace_vocab_filepath}.")
+        if not os.path.exists(self.replace_vocab_filepath):
+            logger.warning(f"replace_vocab file not found: {self.replace_vocab_filepath}.")
             return None
         else:
-            with open(replace_vocab_filepath) as f:
+            with open(self.replace_vocab_filepath) as f:
                 replace_vocab = json.load(f)
-            logger.info(f"replace_vocab loaded: {replace_vocab_filepath}")
+            logger.info(f"replace_vocab loaded: {self.replace_vocab_filepath}")
             return replace_vocab
+
+    def set_replace_vocab(self, replace_vocab):
+        with open(self.replace_vocab_filepath, 'w') as f:
+            json.dump(replace_vocab, f)
+        self.replace_vocab = replace_vocab
 
     # HELP FUNC
     def isModelOfficial(self,model_version):
@@ -604,7 +609,7 @@ class TTSWrapper:
             return text, None
 
     def replace_words(self, text, language):
-        if self.replace_vocab:
+        if self.replace_vocab and language in self.replace_vocab:
             replace_vocab_lang = self.replace_vocab[language]
             for term in replace_vocab_lang:
                 text = re.sub(pattern=rf'\b{term}\b', repl=replace_vocab_lang[term], string=text)
@@ -642,7 +647,12 @@ class TTSWrapper:
                             f"Language extracted from the input text ({lang_from_text}) is not supported! "
                             f"Use default language ({language})."
                         )
-                text = self.replace_words(text, language)
+                modified_text = self.replace_words(text, language)
+                if modified_text != text:
+                    logger.info(
+                        f"\nSource text: {text}\nModified text: {modified_text}"
+                    )
+                    text = modified_text
 
             # Generate unic name for cached result
             if self.enable_cache_results:
