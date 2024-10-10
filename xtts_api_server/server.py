@@ -143,6 +143,10 @@ class SynthesisFileRequest(BaseModel):
     language: str
     file_name_or_path: str  
 
+@app.get("/replace_vocab")
+def get_replace_vocab():
+    return XTTS.replace_vocab
+
 @app.get("/speakers_list")
 def get_speakers():
     speakers = XTTS.get_speakers()

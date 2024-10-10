@@ -96,6 +96,8 @@ class TTSWrapper:
             with open(self.cache_file_path, 'w') as cache_file:
                 json.dump({}, cache_file)
 
+        self.replace_vocab = None
+        self.lang_pattern = None
         self.string_parser = string_parser
         if self.string_parser:
             self.lang_pattern = re.compile(r"<(language|lang)=['\"]?(.*?)['\"]?>(.*)")
