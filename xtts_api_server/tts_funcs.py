@@ -634,8 +634,12 @@ class TTSWrapper:
                     text = f.read()
 
             if self.string_parser:
+                logger.info(f"Input text: {text}")
+
                 # Replace line breaks with commas to handle queries with line breaks
-                text = ', '.join(text.split('\n'))
+                if '\n' in text:
+                    text = ', '.join(text.split('\n'))
+                    logger.info(f"Replace line breaks: {text}")
 
                 text, lang_from_text = self.get_lang_from_text(text)
                 if lang_from_text:
@@ -651,7 +655,6 @@ class TTSWrapper:
                             f"Language extracted from the input text ({lang_from_text}) is not supported! "
                             f"Use default language ({language})."
                         )
-                logger.info(f"Input text: {text}")
                 modified_text = self.replace_words(text, language)
                 if modified_text != text:
                     logger.info(
