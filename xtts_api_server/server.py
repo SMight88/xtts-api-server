@@ -127,6 +127,7 @@ class ModelNameRequest(BaseModel):
 
 class TTSSettingsRequest(BaseModel):
     stream_chunk_size: int
+    enable_cache_results: bool
     temperature: float
     speed: float
     length_penalty: float
@@ -196,7 +197,11 @@ def get_models_list():
 
 @app.get("/get_tts_settings")
 def get_tts_settings():
-    settings = {**XTTS.tts_settings, "stream_chunk_size": XTTS.stream_chunk_size}
+    settings = {
+        **XTTS.tts_settings,
+        "stream_chunk_size": XTTS.stream_chunk_size,
+        "enable_cache_results": XTTS.enable_cache_results
+    }
     return settings
 
 

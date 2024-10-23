@@ -9,7 +9,9 @@ import time
 import wave
 from datetime import datetime
 from pathlib import Path
+from typing import List
 
+import jsonlines
 import numpy as np
 import torch
 import torchaudio
@@ -88,15 +90,12 @@ class TTSWrapper:
         self.create_directories()
         check_tts_version()
 
-        self.enable_cache_results = enable_cache_results
-        self.cache_file_path = os.path.join(output_folder, "cache.json")
-
         self.is_official_model = True
 
+        self.enable_cache_results = enable_cache_results
+        self.cache_file_path = os.path.join(output_folder, "cache.json")
         if self.enable_cache_results:
-            # Reset the contents of the cache file at each initialization.
-            with open(self.cache_file_path, 'w') as cache_file:
-                json.dump({}, cache_file)
+            self.cache_data = self.get_cache_data()
 
         self.replace_vocab_filepath = os.path.join(self.model_folder, 'replace_vocab.json')
         self.replace_vocab = None
@@ -122,6 +121,21 @@ class TTSWrapper:
                 replace_vocab = json.load(f)
             logger.info(f"replace_vocab loaded: {self.replace_vocab_filepath}")
             return replace_vocab
+
+    def get_cache_data(self) -> List:
+        cache_data = []  # Initialization of an empty list if the file does not exist or is empty.
+        try:
+            # Check if the file exists and its contents before downloading.
+            if os.path.exists(self.cache_file_path) and os.path.getsize(self.cache_file_path) > 0:
+                logger.info(f'The cache file exists and is not empty: {self.cache_file_path}')
+                with jsonlines.open(self.cache_file_path, 'r') as reader:
+                    cache_data = list(reader)
+                    logger.info(f"Cached data loaded: {len(cache_data)} lines.")
+        except IOError as e:
+            logger.error("I/O error occurred while loading the cache: ", str(e))
+        except Exception as e:
+            logger.error("Error occurred while loading the cache: ", str(e))
+        return cache_data
 
     def set_replace_vocab(self, replace_vocab):
         with open(self.replace_vocab_filepath, 'w') as f:
@@ -161,42 +175,21 @@ class TTSWrapper:
     def check_cache(self, text_params):
         if not self.enable_cache_results:
             return None
-
-        try:
-            with open(self.cache_file_path) as cache_file:
-                cache_data = json.load(cache_file)
-
-            for entry in cache_data.values():
-                if all(entry[key] == value for key, value in text_params.items()):
-                    return entry['file_name']
-
-            return None
-
-        except FileNotFoundError:
-            return None
+        for entry in self.cache_data:
+            if all(entry[key] == value for key, value in text_params.items()):
+                return entry['file_name']
 
     def update_cache(self, text_params, file_name):
         if not self.enable_cache_results:
             return None
-        try:
-            # Check if the file exists and its contents before downloading.
-            if os.path.exists(self.cache_file_path) and os.path.getsize(self.cache_file_path) > 0:
-                with open(self.cache_file_path, 'r') as cache_file:
-                    cache_data = json.load(cache_file)
-            else:
-                cache_data = {}  # Initialization of an empty dictionary if the file does not exist or is empty.
+        data = {**text_params, 'file_name': file_name}
+        self.cache_data.append(data)
+        self.save_to_cache_file(cache_data=data, mode='a')
+        logger.info("Cache updated successfully.")
 
-            timestamp = datetime.now().strftime("%Y%m%d%H%M%S%f")[:17]
-            cache_data[timestamp] = {**text_params, 'file_name': file_name}
-
-            with open(self.cache_file_path, 'w') as cache_file:
-                json.dump(cache_data, cache_file)
-
-            logger.info("Cache updated successfully.")
-        except IOError as e:
-            print("I/O error occurred while updating the cache: ", str(e))
-        except json.JSONDecodeError as e:
-            print("JSON decode error occurred while updating the cache: ", str(e))
+    def save_to_cache_file(self, cache_data: dict, mode='a'):
+        with jsonlines.open(self.cache_file_path, mode) as writer:
+            writer.write(cache_data)
 
     # LOAD FUNCS
     def load_model(self, load=True):
@@ -333,7 +326,8 @@ class TTSWrapper:
             raise ValueError("Provided path is not a valid directory")
 
     def set_tts_settings(self, temperature, speed, length_penalty,
-                         repetition_penalty, top_p, top_k, enable_text_splitting, stream_chunk_size):
+                         repetition_penalty, top_p, top_k, enable_text_splitting, stream_chunk_size,
+                         enable_cache_results):
         # Validate each parameter and raise an exception if any checks fail.
 
         # Check temperature
@@ -380,6 +374,13 @@ class TTSWrapper:
         }
 
         self.stream_chunk_size = stream_chunk_size
+
+        if not self.enable_cache_results and enable_cache_results:
+            logger.info('Enable results caching.')
+        elif self.enable_cache_results and not enable_cache_results:
+            logger.info('Disable results caching.')
+
+        self.enable_cache_results = enable_cache_results
 
         print("Successfully updated TTS settings.")
 
@@ -664,7 +665,7 @@ class TTSWrapper:
 
             # Generate unic name for cached result
             if self.enable_cache_results:
-                timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+                timestamp = datetime.now().strftime("%Y%m%d%H%M%S%f")[:17]
                 file_name_or_path = timestamp + "_cache_" + file_name_or_path
                 output_file = os.path.join(self.output_folder, file_name_or_path)
 
