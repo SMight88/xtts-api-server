@@ -377,6 +377,7 @@ class TTSWrapper:
 
         if not self.enable_cache_results and enable_cache_results:
             logger.info('Enable results caching.')
+            self.cache_data = self.get_cache_data()
         elif self.enable_cache_results and not enable_cache_results:
             logger.info('Disable results caching.')
 
@@ -627,6 +628,9 @@ class TTSWrapper:
                 output_file = file_name_or_path
             else:
                 # Only a filename was provided; prepend with output folder.
+                # Generate unic name for cached result
+                timestamp = datetime.now().strftime("%Y%m%d%H%M%S%f")[:17]
+                file_name_or_path = timestamp + "_cache_" + file_name_or_path
                 output_file = os.path.join(self.output_folder, file_name_or_path)
 
             # Check if 'text' is a valid path to a '.txt' file.
@@ -662,12 +666,6 @@ class TTSWrapper:
                         f"Modified text: {modified_text}"
                     )
                     text = modified_text
-
-            # Generate unic name for cached result
-            if self.enable_cache_results:
-                timestamp = datetime.now().strftime("%Y%m%d%H%M%S%f")[:17]
-                file_name_or_path = timestamp + "_cache_" + file_name_or_path
-                output_file = os.path.join(self.output_folder, file_name_or_path)
 
             # Replace double quotes with single, asterisks, carriage returns, and line feeds
             clear_text = self.clean_text(text)
