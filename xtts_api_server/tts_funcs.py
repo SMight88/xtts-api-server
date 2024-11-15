@@ -64,7 +64,11 @@ default_tts_settings = {
     "enable_text_splitting": True
 }
 
-with open("riva_settings.json") as f:
+if os.path.exists("riva_settings.json"):
+    riva_settings_path = "riva_settings.json"
+else:
+    riva_settings_path = "xtts_api_server/riva_settings.json"
+with open(riva_settings_path) as f:
     default_riva_settings = json.load(f)
 
 official_model_list = ["v2.0.0", "v2.0.1", "v2.0.2", "v2.0.3", "main"]
@@ -457,9 +461,9 @@ class TTSWrapper:
 
     # Special format for SillyTavern
     def get_speakers_special(self):
-        BASE_URL = os.getenv('BASE_URL', '127.0.0.1:8020')
+        BASE_URL = os.getenv('BASE_URL', '127.0.0.1:8060')
         BASE_HOST = os.getenv('BASE_HOST', '127.0.0.1')
-        BASE_PORT = os.getenv('BASE_PORT', '8020')
+        BASE_PORT = os.getenv('BASE_PORT', '8060')
         TUNNEL_URL = os.getenv('TUNNEL_URL', '')
 
         is_local_host = BASE_HOST == '127.0.0.1' or BASE_HOST == "localhost"

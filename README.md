@@ -92,7 +92,7 @@ docker compose up # or with -d to run in background
 
 ## Starting Server
 
-`python -m xtts_api_server` will run on default ip and port (localhost:8020)
+`python -m xtts_api_server` will run on default ip and port (localhost:8060)
 
 Use the `--deepspeed` flag to process the result fast ( 2-3x acceleration )
 
@@ -159,7 +159,7 @@ Improved streaming mode is suitable for complex languages such as Chinese, Japan
 
 # API Docs
 
-API Docs can be accessed from [http://localhost:8020/docs](http://localhost:8020/docs)
+API Docs can be accessed from [http://localhost:8060/docs](http://localhost:8060/docs)
 
 # How to add speaker
 

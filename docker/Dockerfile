@@ -24,7 +24,7 @@ RUN pip install -r requirements.txt
 RUN pip install torch torchaudio --index-url https://download.pytorch.org/whl/cu121
 
 # Expose the container ports
-EXPOSE 8020
+EXPOSE 8060
 
 # Run xtts_api_server when the container starts
-CMD ["bash", "-c", "python3 -m xtts_api_server --listen -p 8020 -t 'http://localhost:8020' -sf '/app/xtts-server/speakers' -o '/app/xtts-server/output' -mf '/app/xtts-server/models' --deepspeed --use-cache --string-parser"]
+CMD ["bash", "-c", "python3 -m xtts_api_server --listen -p 8060 -t 'http://localhost:8060' -sf '/app/xtts-server/speakers' -o '/app/xtts-server/output' -mf '/app/xtts-server/models' --deepspeed --use-cache --string-parser"]
