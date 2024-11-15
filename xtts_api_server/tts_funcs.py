@@ -64,13 +64,6 @@ default_tts_settings = {
     "enable_text_splitting": True
 }
 
-if os.path.exists("riva_settings.json"):
-    riva_settings_path = "riva_settings.json"
-else:
-    riva_settings_path = "xtts_api_server/riva_settings.json"
-with open(riva_settings_path) as f:
-    default_riva_settings = json.load(f)
-
 official_model_list = ["v2.0.0", "v2.0.1", "v2.0.2", "v2.0.3", "main"]
 official_model_list_v2 = ["2.0.0", "2.0.1", "2.0.2", "2.0.3"]
 
@@ -117,9 +110,20 @@ class TTSWrapper:
             self.lang_pattern = re.compile(r"<(language|lang)=['\"]?(.*?)['\"]?>(.*)")
             self.replace_vocab = self.get_replace_vocab()
 
-        self.riva_settings = default_riva_settings
-        if self.riva_settings['use_riva']:
+        self.riva_settings_filepath = os.path.join(self.model_folder, 'riva_settings.json')
+        self.riva_settings = self.get_riva_settings()
+        if self.riva_settings and self.riva_settings['use_riva']:
             self.riva = RivaTTSInference(**self.riva_settings['riva_params'])
+
+    def get_riva_settings(self):
+        if not os.path.exists(self.riva_settings_filepath):
+            logger.warning(f"riva_settings file not found: {self.riva_settings_filepath}.")
+            return None
+        else:
+            with open(self.riva_settings_filepath) as f:
+                riva_settings = json.load(f)
+            logger.info(f"riva_settings loaded: {self.riva_settings_filepath}")
+            return riva_settings
 
     def get_replace_vocab(self):
         # Place the replace_vocab.json into the model_folder. The structure:
