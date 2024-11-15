@@ -5,6 +5,7 @@ import json
 import os
 import re
 import socket
+import sys
 import time
 import wave
 from datetime import datetime
@@ -21,6 +22,10 @@ from TTS.tts.models.xtts import Xtts
 from loguru import logger
 
 from xtts_api_server.modeldownloader import download_model, check_tts_version
+from xtts_api_server.riva_api import RivaTTSInference
+
+logger.remove()
+logger.add(sys.stderr, level="INFO")
 
 
 # Class to check tts settings
@@ -58,6 +63,9 @@ default_tts_settings = {
     "speed": 1.2,
     "enable_text_splitting": True
 }
+
+with open("riva_settings.json") as f:
+    default_riva_settings = json.load(f)
 
 official_model_list = ["v2.0.0", "v2.0.1", "v2.0.2", "v2.0.3", "main"]
 official_model_list_v2 = ["2.0.0", "2.0.1", "2.0.2", "2.0.3"]
@@ -104,6 +112,10 @@ class TTSWrapper:
         if self.string_parser:
             self.lang_pattern = re.compile(r"<(language|lang)=['\"]?(.*?)['\"]?>(.*)")
             self.replace_vocab = self.get_replace_vocab()
+
+        self.riva_settings = default_riva_settings
+        if self.riva_settings['use_riva']:
+            self.riva = RivaTTSInference(**self.riva_settings['riva_params'])
 
     def get_replace_vocab(self):
         # Place the replace_vocab.json into the model_folder. The structure:
@@ -493,6 +505,22 @@ class TTSWrapper:
         chunk = (chunk * 32767).astype(np.int16)
         return chunk.tobytes()
 
+    def use_riva_to_generate(self, language, speaker_name):
+        if self.riva_settings['use_riva'] \
+                and self.riva.is_riva_tts_available \
+                and language == self.riva_settings['language'] \
+                and self.riva_settings['speaker_name'] in speaker_name:
+            return True
+
+    def change_text_to_riva_tts(self, text):
+        changed_text = (
+                self.riva_settings['riva_params']['text_prefix'] +
+                text +
+                self.riva_settings['riva_params']['text_postfix']
+        )
+        logger.info(f"Text for Riva TTS: {changed_text}")
+        return changed_text
+
     async def stream_generation(self, text, speaker_name, speaker_wav, language, output_file):
         # Log time
         generate_start_time = time.time()  # Record the start time of loading the model
@@ -500,27 +528,36 @@ class TTSWrapper:
         gpt_cond_latent, speaker_embedding = self.get_or_create_latents(speaker_name, speaker_wav)
         file_chunks = []
 
-        chunks = self.model.inference_stream(
-            text,
-            language,
-            speaker_embedding=speaker_embedding,
-            gpt_cond_latent=gpt_cond_latent,
-            **self.tts_settings,  # Expands the object with the settings and applies them for generation
-            stream_chunk_size=self.stream_chunk_size,
-        )
-
-        for chunk in chunks:
-            if isinstance(chunk, list):
-                chunk = torch.cat(chunk, dim=0)
-            file_chunks.append(chunk)
-
-            yield self.prepare_chunk_for_streaming(chunk)
-
-        if len(file_chunks) > 0:
-            wav = torch.cat(file_chunks, dim=0)
-            torchaudio.save(output_file, wav.cpu().squeeze().unsqueeze(0), 24000)
+        if self.use_riva_to_generate(language, speaker_name):
+            logger.info(f"Use Riva streaming TTS for speaker_name: {speaker_name}, language: {language}.")
+            text = self.change_text_to_riva_tts(text)
+            out_f = self.riva.create_output_file(output_file)
+            responses = self.riva.get_streaming_responses(text)
+            for resp in responses:
+                yield resp.audio
+                out_f.writeframesraw(resp.audio)
         else:
-            logger.warning("No audio generated.")
+            chunks = self.model.inference_stream(
+                text,
+                language,
+                speaker_embedding=speaker_embedding,
+                gpt_cond_latent=gpt_cond_latent,
+                **self.tts_settings,  # Expands the object with the settings and applies them for generation
+                stream_chunk_size=self.stream_chunk_size,
+            )
+
+            for chunk in chunks:
+                if isinstance(chunk, list):
+                    chunk = torch.cat(chunk, dim=0)
+                file_chunks.append(chunk)
+
+                yield self.prepare_chunk_for_streaming(chunk)
+
+            if len(file_chunks) > 0:
+                wav = torch.cat(file_chunks, dim=0)
+                torchaudio.save(output_file, wav.cpu().squeeze().unsqueeze(0), 24000)
+            else:
+                logger.warning("No audio generated.")
 
         generate_end_time = time.time()  # Record the time to generate TTS
         generate_elapsed_time = generate_end_time - generate_start_time
@@ -551,17 +588,24 @@ class TTSWrapper:
         # Log time
         generate_start_time = time.time()  # Record the start time of loading the model
 
-        gpt_cond_latent, speaker_embedding = self.get_or_create_latents(speaker_name, speaker_wav)
+        if self.use_riva_to_generate(language, speaker_name):
+            logger.info(f"Use Riva TTS for speaker_name: {speaker_name}, language: {language}.")
+            text = self.change_text_to_riva_tts(text)
+            out_f = self.riva.create_output_file(output_file)
+            resp = self.riva.synthesize(text)
+            out_f.writeframesraw(resp.audio)
+        else:
+            gpt_cond_latent, speaker_embedding = self.get_or_create_latents(speaker_name, speaker_wav)
 
-        out = self.model.inference(
-            text,
-            language,
-            gpt_cond_latent=gpt_cond_latent,
-            speaker_embedding=speaker_embedding,
-            **self.tts_settings,  # Expands the object with the settings and applies them for generation
-        )
+            out = self.model.inference(
+                text,
+                language,
+                gpt_cond_latent=gpt_cond_latent,
+                speaker_embedding=speaker_embedding,
+                **self.tts_settings,  # Expands the object with the settings and applies them for generation
+            )
 
-        torchaudio.save(output_file, torch.tensor(out["wav"]).unsqueeze(0), 24000)
+            torchaudio.save(output_file, torch.tensor(out["wav"]).unsqueeze(0), 24000)
 
         generate_end_time = time.time()  # Record the time to generate TTS
         generate_elapsed_time = generate_end_time - generate_start_time

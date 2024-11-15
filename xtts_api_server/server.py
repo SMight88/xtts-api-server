@@ -205,6 +205,11 @@ def get_tts_settings():
     return settings
 
 
+@app.get("/get_riva_settings")
+def get_riva_settings():
+    return XTTS.riva_settings
+
+
 @app.get("/sample/{file_name:path}")
 def get_sample(file_name: str):
     # A fix for path traversal vulenerability. 

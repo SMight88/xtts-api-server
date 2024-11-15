@@ -1,0 +1,17 @@
+{
+    "use_riva": true,
+    "language": "en",
+    "speaker_name": "antonio",
+    "riva_params": {
+        "riva_port": "50063",
+        "riva_host": "127.0.0.1",
+        "language_code": "en-US",
+        "sample_rate": 24000,
+        "voice_name": "English-US",
+        "nchannels": 1,
+        "sampwidth": 2,
+        "quality": 20,
+        "text_prefix": "<speak><prosody rate=\"90%\">",
+        "text_postfix": "</prosody></speak>"
+    }
+}
