@@ -712,12 +712,13 @@ class TTSWrapper:
                             f"Language extracted from the input text ({lang_from_text}) is not supported! "
                             f"Use default language ({language})."
                         )
-                modified_text = self.replace_words(text, language)
-                if modified_text != text:
-                    logger.info(
-                        f"Modified text: {modified_text}"
-                    )
-                    text = modified_text
+                if not self.use_riva_to_generate(language, speaker_name_or_path):
+                    modified_text = self.replace_words(text, language)
+                    if modified_text != text:
+                        logger.info(
+                            f"Modified text: {modified_text}"
+                        )
+                        text = modified_text
 
             # Replace double quotes with single, asterisks, carriage returns, and line feeds
             clear_text = self.clean_text(text)
