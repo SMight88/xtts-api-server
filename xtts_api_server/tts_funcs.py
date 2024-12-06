@@ -107,7 +107,9 @@ class TTSWrapper:
         self.lang_pattern = None
         self.string_parser = string_parser
         if self.string_parser:
-            self.lang_pattern = re.compile(r"<(language|lang)=['\"]?(.*?)['\"]?>(.*)")
+            self.lang_pattern = re.compile(
+                r"[<\[{(]?(?:language|lang|lng|l|['\"])?\s*=?\s*['\"]?([\w-]+)['\"]?\s*[>\]})/]?\s*(.*)"
+            )
             self.replace_vocab = self.get_replace_vocab()
 
         self.riva_settings_filepath = os.path.join(self.model_folder, 'riva_settings.json')
@@ -657,8 +659,9 @@ class TTSWrapper:
     def get_lang_from_text(self, text):
         match = self.lang_pattern.match(text)
         if match:
-            language = match.group(2).strip()
-            text = match.group(3).strip()
+            language = match.group(1)
+            language = re.sub(r"[^a-zA-Z-_]", "", language).lower().strip()
+            text = match.group(2).strip()
             return text, language
         else:
             return text, None
