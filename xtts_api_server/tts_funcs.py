@@ -108,7 +108,7 @@ class TTSWrapper:
         self.string_parser = string_parser
         if self.string_parser:
             self.lang_pattern = re.compile(
-                r"[<\[{(]?(?:language|lang|lng|l|['\"])?\s*=?\s*['\"]?([\w-]+)['\"]?\s*[>\]})/]?\s*(.*)"
+                r"[<\[{(](?:language|lang|lng|l|['\"])?\s*=?\s*['\"]?([\w-]+)['\"]?\s*[>\]})/]\s*(.*)"
             )
             self.replace_vocab = self.get_replace_vocab()
 
